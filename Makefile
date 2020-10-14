@@ -1,6 +1,5 @@
 all: bin/dev
 test:unit-test
-export DOCKER_BUILDKIT = 1 
 
 PLATFORM=local
 

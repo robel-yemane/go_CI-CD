@@ -13,7 +13,6 @@ ENV CGO_ENABLED=0
 
 COPY go.* .
 RUN go mod download
-COPY . .  
 
 FROM base AS build
 ARG TARGETOS
@@ -21,14 +20,16 @@ ARG TARGETARCH
 #the --mount option attached to the run command. This mount option means that
 #each time the go build command is run, the container will have the cache
 #mounted to Go's compiler cache folder
-RUN --mount=type=cache,target=/root/.cache/go-build \
+RUN --mount=target=. \
+    --mount=type=cache,target=/root/.cache/go-build \
     GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /out/dev-env .
 
 #go tests use the same cache as teh build so we mount the cache for this stage
 #too. This allows Go to ony run tests if there have been code changes which
 #makes teh tests run quicker
 FROM base AS unit-test
-RUN --mount=type=cache,target=/root/.cache/go-build \
+RUN --mount=target=. \
+     --mount=type=cache,target=/root/.cache/go-build \
     go test -v .
 
 #add a linter
@@ -36,8 +37,19 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 FROM golangci/golangci-lint:v1.27-alpine AS lint-base
 
 FROM base AS lint
-COPY --from=lint-base /usr/bin/golangci-lint /usr/bin/golangci-lint
-RUN --mount=type=cache,target=/root/.cache/go-build \
+# Performing a COPY will create an extra layer in the container image which
+# slows things down and uses extra disk space. This can be avoided by using 
+#`RUN --mount` and bind mounting from the build context, from a stage, or an
+#image.
+
+#The default mount is a read only bind mount from the context that you pass
+#with the `docker build` command. This means that you can replace the `COPY . .`
+#with a `RUN --mount=target=.` wherever you need the files from your context to
+#run a command but do not need them to persist in the final image
+#COPY --from=lint-base /usr/bin/golangci-lint /usr/bin/golangci-lint
+RUN --mount=target=. \
+    --mount=from=lint-base,src=/usr/bin/golangci-lint,target=/usr/bin/golangci-lint \
+    --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/root/.cache/golangci-lint \
     golangci-lint run --timeout 10m0s ./...
 
