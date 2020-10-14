@@ -1,5 +1,6 @@
 all: bin/dev
 test:unit-test
+export DOCKER_BUILDKIT = 1 
 
 PLATFORM=local
 
@@ -12,3 +13,7 @@ bin/dev:
 .PHONY: uni-test
 unit-test:
 	@DOCKER_BUILDKIT=1 docker build . --target unit-test
+
+.PHONY: lint
+lint:
+	@DOCKER_BUILDKIT=1 docker build . --target lint

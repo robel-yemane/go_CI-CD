@@ -22,15 +22,24 @@ ARG TARGETARCH
 #each time the go build command is run, the container will have the cache
 #mounted to Go's compiler cache folder
 RUN --mount=type=cache,target=/root/.cache/go-build \
-GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /out/dev-env .
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /out/dev-env .
 
 #go tests use the same cache as teh build so we mount the cache for this stage
 #too. This allows Go to ony run tests if there have been code changes which
 #makes teh tests run quicker
 FROM base AS unit-test
 RUN --mount=type=cache,target=/root/.cache/go-build \
-go test -v .
+    go test -v .
 
+#add a linter
+#lint-base stage that runs the lint, mounting a cache to the correct place
+FROM golangci/golangci-lint:v1.27-alpine AS lint-base
+
+FROM base AS lint
+COPY --from=lint-base /usr/bin/golangci-lint /usr/bin/golangci-lint
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/root/.cache/golangci-lint \
+    golangci-lint run --timeout 10m0s ./...
 
 #add a cross compiling target
 FROM scratch AS bin-unix
